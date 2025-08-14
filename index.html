@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="description" content="Come on, shake your body baby." />
+    <meta name="keywords" content="matias martinez, ditto, konga, conga, shake your body" />
+    <meta name="twitter:site" content="@martinez" />
+    <meta name="twitter:creator" content="@martinez" />
+    <title>Conga!</title>
+
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        html {
+            display: table;
+        }
+
+        body {
+            display: table-cell;
+            vertical-align: middle;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 600;
+            font-family: sans-serif;
+            -webkit-font-smoothing: antialiased;
+            color: #444;
+            background-color: #000;
+            perspective: 1000;
+            overflow: hidden;
+        }
+
+        button {
+            font: inherit;
+            appearance: none;
+            -webkit-appearance: none;
+            outline: none;
+            padding: 8px 16px;
+            color: #000;
+            text-shadow: 0 1px 2px hsla(0, 0%, 100%, 0.15);
+            background-color: #ad68d9;
+            background-image: linear-gradient(#ad68d9, #a960d7);
+            box-shadow: inset 0 0 2px hsla(0, 0%, 100%, 0.15);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease-out;
+            position: relative;
+            z-index: 2;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            background-image: linear-gradient(#c391e3, #bf89e1);
+        }
+
+        button:active {
+            transform: scale(0.95);
+            opacity: 0.5;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        .cue-in {
+            animation: Cue-In 2s ease-in-out;
+            display: block !important;
+        }
+
+        @keyframes Cue-In {
+            0% {
+                opacity: 0;
+                transform: scale(0.1) rotateX(45deg);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) rotateX(0);
+            }
+        }
+
+        audio {
+            position: absolute;
+            width: 0;
+            height: 0;
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+    <button id="startButton">Trust me</button>
+    <canvas id="animationCanvas"></canvas>
+    <audio id="backgroundMusic" loop>
+        <source src="konga.92cb31af.mp3" type="audio/mp3">
+    </audio>
+
+    <script>
+        const app = {
+            canvas: null,
+            ctx: null,
+            audio: null,
+            startButton: null,
+            dittoImage: null,
+            dittoSprites: [],
+            centerDitto: null,
+            backgroundColor: '#000',
+            containerColor: '#000',
+            elapsedTime: 0,
+            lastTime: 0,
+
+            dittoSpriteData: {
+                frameWidth: 33,
+                frameHeight: 29,
+                totalFrames: 4,
+                imageSrc: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIQAAAAdAgMAAAAWQyy/AAAADFBMVEX///+4YOA4ODj4+PhASPNeAAAAAXRSTlMAQObYZgAAAStJREFUeF6l08FqhEAMBuBhbk6fYyj6Pgmul3pZEN9hWV8i9FgvC3X6PELpe2zP9Y/pyCLLFprLoP83STzo/lv+/ZEoGGwMw10RacmePmML4PfOjyqev6WGKDs/Kth40QiEXInxLPzxle+WHUS8kgoi6vU8zzaobIQB31R4QrU4T9RVKl5ngpheaBP1KlmWLlU4z0iCJioORKxCmzm5nDSJAOx0jxthdEBwzOLIkJyFIEGgQpvVqxSMhVRxQKCiEYhozQtbPV/Fmx6iJE5ErYkWgi8mlOYkEiVZxQRpglUojSZB9wJUTDoxkTeMN4J3ot0JT79CTMifRUmUEtV5803EJcD3+5ScS+MmML+feHBhCcKSWOVvw9s07H+LTdwvL/1Fp9yvaggJUx/WD0e0wREEScedAAAAAElFTkSuQmCC'
+            },
+
+            setCrispRendering() {
+                app.ctx.imageSmoothingEnabled = false;
+                app.ctx.mozImageSmoothingEnabled = false;
+                app.ctx.webkitImageSmoothingEnabled = false;
+                app.ctx.msImageSmoothingEnabled = false;
+            },
+
+            getRandomColor() {
+                return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+            },
+
+            drawRoundedRect(x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + r, y);
+                this.ctx.arcTo(x + w, y, x + w, y + h, r);
+                this.ctx.arcTo(x + w, y + h, x, y + h, r);
+                this.ctx.arcTo(x, y + h, x, y, r);
+                this.ctx.arcTo(x, y, x + w, y, r);
+                this.ctx.closePath();
+            },
+
+            DittoSprite: class {
+                constructor() {
+                    const { frameWidth, frameHeight } = app.dittoSpriteData;
+                    const startFromRight = Math.random() > 0.5;
+                    const speed = (Math.random() * 600 + 400) * (startFromRight ? -1 : 1);
+                    const scale = Math.random() * 0.9 + 0.1;
+
+                    this.animationFrame = 0;
+                    this.time = 0;
+                    this.animationFrameDuration = 0.085;
+                    this.speed = { x: speed, y: 0 };
+                    this.opacity = scale;
+                    this.size = { width: frameWidth * scale * 10, height: frameHeight * scale * 10 };
+                    this.origin = {
+                        x: startFromRight ? app.canvas.width : -this.size.width,
+                        y: Math.random() * (app.canvas.height - this.size.height)
+                    };
+                }
+
+                update(deltaTime) {
+                    this.time += deltaTime;
+                    if (this.time >= this.animationFrameDuration) {
+                        this.animationFrame = (this.animationFrame + 1) % app.dittoSpriteData.totalFrames;
+                        this.time = 0;
+                    }
+                    this.origin.x += this.speed.x * deltaTime;
+                }
+
+                draw() {
+                    const { frameWidth, frameHeight } = app.dittoSpriteData;
+                    const frameX = this.animationFrame * frameWidth;
+                    app.ctx.globalAlpha = this.opacity;
+                    app.ctx.drawImage(
+                        app.dittoImage,
+                        frameX, 0, frameWidth, frameHeight,
+                        this.origin.x, this.origin.y,
+                        this.size.width, this.size.height
+                    );
+                }
+            },
+
+            CenterDitto: class {
+                constructor() {
+                    this.animationFrame = 0;
+                    this.time = 0;
+                    this.animationFrameDuration = 0.085;
+                    this.opacity = 1;
+                    this.size = { width: 0, height: 0 };
+                    this.origin = { x: 0, y: 0 };
+                }
+
+                update(deltaTime) {
+                    const { frameWidth, frameHeight } = app.dittoSpriteData;
+                    let scale = Math.min(
+                        (0.8 * app.canvas.width) / frameWidth,
+                        (0.8 * app.canvas.height) / frameHeight
+                    );
+                    scale = Math.floor(scale); // force integer scaling for sharpness
+                    this.size = { width: frameWidth * scale, height: frameHeight * scale };
+                    this.origin = {
+                        x: (app.canvas.width - this.size.width) / 2,
+                        y: (app.canvas.height - this.size.height) / 2
+                    };
+
+                    this.time += deltaTime;
+                    if (this.time >= this.animationFrameDuration) {
+                        this.animationFrame = (this.animationFrame + 1) % app.dittoSpriteData.totalFrames;
+                        this.time = 0;
+                    }
+                }
+
+                draw() {
+                    const { frameWidth, frameHeight } = app.dittoSpriteData;
+                    const frameX = this.animationFrame * frameWidth;
+                    app.ctx.globalAlpha = this.opacity;
+                    app.ctx.drawImage(
+                        app.dittoImage,
+                        frameX, 0, frameWidth, frameHeight,
+                        this.origin.x, this.origin.y,
+                        this.size.width, this.size.height
+                    );
+                }
+            },
+
+            main() {
+                const currentTime = performance.now();
+                const deltaTime = (currentTime - app.lastTime) / 1000;
+                app.lastTime = currentTime;
+
+                app.update(deltaTime);
+                app.render();
+
+                requestAnimationFrame(app.main);
+            },
+
+            update(deltaTime) {
+                app.elapsedTime += deltaTime;
+                if (app.elapsedTime >= 0.4) {
+                    app.elapsedTime = 0;
+                    app.backgroundColor = app.getRandomColor();
+                    app.containerColor = app.getRandomColor();
+                    app.dittoSprites.push(new app.DittoSprite());
+                }
+
+                app.centerDitto.update(deltaTime);
+
+                app.dittoSprites.forEach(sprite => sprite.update(deltaTime));
+
+                app.dittoSprites = app.dittoSprites.filter(sprite => {
+                    return sprite.origin.x < app.canvas.width + sprite.size.width &&
+                           sprite.origin.x > -sprite.size.width;
+                });
+            },
+
+            render() {
+                const { width, height } = app.canvas;
+                app.ctx.globalAlpha = 1;
+                app.ctx.fillStyle = app.backgroundColor;
+                app.ctx.fillRect(0, 0, width, height);
+
+                if (width > 24 && height > 24) {
+                    app.drawRoundedRect(32, 32, width - 64, height - 64, 12);
+                    app.ctx.fillStyle = app.containerColor;
+                    app.ctx.fill();
+                }
+
+                app.dittoSprites.forEach(sprite => sprite.draw());
+                app.centerDitto.draw();
+            },
+
+            init() {
+                app.canvas = document.getElementById('animationCanvas');
+                app.ctx = app.canvas.getContext('2d');
+                app.audio = document.getElementById('backgroundMusic');
+                app.startButton = document.getElementById('startButton');
+
+                app.setCrispRendering();
+
+                app.dittoImage = new Image();
+                app.dittoImage.src = app.dittoSpriteData.imageSrc;
+
+                window.addEventListener('resize', app.resizeCanvas);
+                app.startButton.addEventListener('click', app.startAnimation);
+
+                app.resizeCanvas();
+            },
+
+            resizeCanvas() {
+                app.canvas.width = window.innerWidth;
+                app.canvas.height = window.innerHeight;
+                app.setCrispRendering();
+            },
+
+            startAnimation() {
+                app.startButton.remove();
+                app.canvas.classList.add('cue-in');
+                app.audio.play().catch(e => console.log('Audio playback failed:', e));
+
+                app.centerDitto = new app.CenterDitto();
+                app.dittoSprites = [];
+
+                app.lastTime = performance.now();
+                app.main();
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
